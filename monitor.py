@@ -54,6 +54,10 @@ def check_event(event_id):
     try:
         response = requests.get(api_url, headers=headers, timeout=10)
         data = response.json()
+        # --- Heartbeat check ---
+        title = data.get("title", "")
+        print(f"Checked OPENTIX [{title}] - Status: {response.status_code} (OK)", flush=True)
+        # -----------------------
     except Exception as e:
         print(f"Error fetching {event_id}: {e}", flush=True)
         return
