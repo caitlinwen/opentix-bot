@@ -61,7 +61,7 @@ def check_event(event_id):
             remaining = plan.get("remainingTickets", 0)
             price = plan.get("price", 0)
             
-            if remaining > 0:
+            if True:
                 print(f"Ticket found at {venue}: NT${price} ({remaining} seats)")
                 msg = format_alert(title, venue, start_time, price, remaining, event_id)
                 send_line_message(msg)
