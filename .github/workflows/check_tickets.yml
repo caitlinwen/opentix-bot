@@ -29,5 +29,5 @@ jobs:
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
-          LOOP_MINUTES: "10"  # Keeps checking every 20 seconds for 10 minutes
+          LOOP_MINUTES: "9"  # Gives a clean buffer before the next runner starts
         run: python monitor.py
