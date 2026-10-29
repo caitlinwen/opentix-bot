@@ -13,7 +13,7 @@ LINE_USER_ID = os.getenv("LINE_USER_ID")
 
 def send_line_message(text_content):
     if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_USER_ID:
-        print("Missing LINE credentials.")
+        print("Missing LINE credentials.", flush=True)
         return
 
     url = "https://api.line.me/v2/bot/message/push"
@@ -25,8 +25,13 @@ def send_line_message(text_content):
         "to": LINE_USER_ID,
         "messages": [{"type": "text", "text": text_content}]
     }
-    res = requests.post(url, json=payload, headers=headers)
-    print(f"Notification status: {res.status_code}")
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"Push status: {res.status_code}", flush=True)
+        if res.status_code != 200:
+            print(f"LINE error details: {res.text}", flush=True)
+    except Exception as e:
+        print(f"Failed to push LINE message: {e}", flush=True)
 
 def format_alert(title, venue, date_str, price, available_count, event_id):
     return (
@@ -49,7 +54,7 @@ def check_event(event_id):
         response = requests.get(api_url, headers=headers, timeout=10)
         data = response.json()
     except Exception as e:
-        print(f"Error fetching {event_id}: {e}")
+        print(f"Error fetching {event_id}: {e}", flush=True)
         return
 
     title = data.get("title", "瑪莎·阿格麗希音樂會")
@@ -61,28 +66,30 @@ def check_event(event_id):
             remaining = plan.get("remainingTickets", 0)
             price = plan.get("price", 0)
 
-            # 測試模式：只發送一次通知就立即結束
-            if True:
-                print(f"[{venue}] 測試發送 LINE 訊息中...")
-                msg = format_alert(title, venue, start_time, price, 1, event_id)
+            if remaining > 0:
+                print(f"[{venue}] 發現釋票: {price} 元, 剩餘 {remaining} 張！", flush=True)
+                msg = format_alert(title, venue, start_time, price, remaining, event_id)
                 send_line_message(msg)
-                return
 
 def poll_for_duration(minutes=10, interval=20):
-    """Polls repeatedly for the specified duration before cleanly terminating."""
     end_time = time.time() + (minutes * 60)
-    print(f"Starting cloud monitoring loop ({interval}s interval for {minutes}m)...")
+    print(f"Starting cloud monitoring loop ({interval}s interval for {minutes}m)...", flush=True)
     
     while time.time() < end_time:
         for eid in EVENT_IDS:
             check_event(eid)
         time.sleep(interval)
 
+# --- ONE-TIME DIRECT TEST ---
 if __name__ == "__main__":
-    # If LOOP_MINUTES is provided, loop in the cloud; otherwise run once
-    loop_mins = int(os.getenv("LOOP_MINUTES", "0"))
-    if loop_mins > 0:
-        poll_for_duration(minutes=loop_mins, interval=20)
-    else:
-        for eid in EVENT_IDS:
-            check_event(eid)
+    print("Testing LINE connection now...", flush=True)
+    msg = format_alert(
+        "瑪莎·阿格麗希鋼琴獨奏會",
+        "台北・國家音樂廳",
+        "11/12 (四) 19:30",
+        "1200",
+        1,
+        "2076925048527581185"
+    )
+    send_line_message(msg)
+    print("Test run completed.", flush=True)
