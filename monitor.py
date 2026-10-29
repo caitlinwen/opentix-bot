@@ -60,11 +60,13 @@ def check_event(event_id):
         for plan in perf.get("pricePlans", []):
             remaining = plan.get("remainingTickets", 0)
             price = plan.get("price", 0)
-            
+
+            # 測試模式：只發送一次通知就立即結束
             if True:
-                print(f"Ticket found at {venue}: NT${price} ({remaining} seats)")
-                msg = format_alert(title, venue, start_time, price, remaining, event_id)
+                print(f"[{venue}] 測試發送 LINE 訊息中...")
+                msg = format_alert(title, venue, start_time, price, 1, event_id)
                 send_line_message(msg)
+                return
 
 def poll_for_duration(minutes=10, interval=20):
     """Polls repeatedly for the specified duration before cleanly terminating."""
