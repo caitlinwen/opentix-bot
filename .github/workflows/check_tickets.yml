@@ -1,0 +1,33 @@
+name: Check OPENTIX Tickets
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # Triggers every 10 minutes in GitHub's cloud
+  workflow_dispatch:        # Allows manual testing from the Actions tab
+
+# Prevent duplicate runners from stacking up if one takes a little longer
+concurrency:
+  group: opentix-monitor
+  cancel-in-progress: true
+
+jobs:
+  run-monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run ticket checker
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          LOOP_MINUTES: "10"  # Keeps checking every 20 seconds for 10 minutes
+        run: python monitor.py
