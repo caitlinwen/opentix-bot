@@ -30,13 +30,12 @@ def send_line_message(text_content):
 
 def format_alert(title, venue, date_str, price, available_count, event_id):
     return (
-        f"🦮🐕 汪汪汪！阿格麗希獵犬聞到了票的味道了！\n\n"
+        f"🎹 阿格麗希釋票速報！\n\n"
         f"{title}\n"
         f"📍{venue}\n"
         f"{date_str}\n\n"
-        f"🎟️ {price} | {available_count} 張\n\n"
-        f"一般可購買座位：{available_count} 張\n\n"
-        f"快去 OPENTIX 搶票！\n"
+        f"🎟️ {price} 元 | 剩餘 {available_count} 張\n\n"
+        f"快去 OPENTIX 搶票：\n"
         f"https://www.opentix.life/event/{event_id}"
     )
 
