@@ -8,8 +8,8 @@ EVENT_IDS = [
     "2072537230141886465",  # 屏東場
 ]
 
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_USER_ID = os.getenv("LINE_USER_ID")
+LINE_CHANNEL_ACCESS_TOKEN = (os.getenv("LINE_CHANNEL_ACCESS_TOKEN") or "").strip()
+LINE_USER_ID = (os.getenv("LINE_USER_ID") or "").strip()
 
 def send_line_message(text_content):
     if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_USER_ID:
