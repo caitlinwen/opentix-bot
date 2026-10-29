@@ -14,6 +14,9 @@ EVENTS = {
 LINE_CHANNEL_ACCESS_TOKEN = (os.getenv("LINE_CHANNEL_ACCESS_TOKEN") or "").strip()
 LINE_USER_ID = (os.getenv("LINE_USER_ID") or "").strip()
 
+# 記錄已發送通知的場次，避免同一輪內每 20 秒重複轟炸
+NOTIFIED_EVENTS = set()
+
 def send_line_message(text_content):
     if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_USER_ID:
         print("Missing LINE credentials.", flush=True)
@@ -62,30 +65,36 @@ def check_event(event_id, venue_name):
 
         html = res.text
 
-        # 擷取頁面標題
         title_match = re.search(r'<title>(.*?)</title>', html)
         title = title_match.group(1).split('|')[0].strip() if title_match else "瑪莎·阿格麗希音樂會"
 
-        # 1. 檢測結構化 Schema 是否標記 InStock
-        is_instock = bool(re.search(r'"availability"\s*:\s*"(?:https?://schema\.org/)?InStock"', html))
-
-        # 2. 檢測 Nuxt 狀態中的售票資訊
-        has_remaining_tickets = False
+        # 檢測是否有明確的剩餘票數（數字大於 0）
         remaining_matches = re.findall(r'remainingTickets["\']?\s*:\s*(\d+)', html)
-        if remaining_matches:
-            for count in remaining_matches:
-                if int(count) > 0:
-                    has_remaining_tickets = True
-                    break
+        has_positive_remaining = any(int(c) > 0 for c in remaining_matches)
 
-        print(f"Checked [{venue_name}] - InStock: {is_instock}, TicketCountFound: {has_remaining_tickets}", flush=True)
+        # 檢測頁面按鈕是否為「立即購票」且未完全售完
+        # OPENTIX 全售完時頁面通常會出現「已售完」或全部方案被加上 block_soldOut
+        is_sold_out_banner = "已售罄" in html or "已售完" in html
+        is_instock_schema = bool(re.search(r'"availability"\s*:\s*"(?:https?://schema\.org/)?InStock"', html))
 
-        # 釋票觸發條件
-        if is_instock or has_remaining_tickets:
-            print(f"🚨 [{venue_name}] 偵測到釋票！正在發送 LINE 通知...", flush=True)
-            detail_msg = "🎟️ 系統偵測到有座位釋出 (InStock)"
-            msg = format_alert(title, venue_name, event_id, detail_msg)
-            send_line_message(msg)
+        is_available = has_positive_remaining or (is_instock_schema and not is_sold_out_banner)
+
+        print(f"Checked [{venue_name}] - InStockSchema: {is_instock_schema}, SoldOutText: {is_sold_out_banner}, TicketsFound: {has_positive_remaining}", flush=True)
+
+        if is_available:
+            # 防重複機制：該場次如果已經推播過，就不再重複發送
+            if event_id not in NOTIFIED_EVENTS:
+                print(f"🚨 [{venue_name}] 偵測到釋票！發送 LINE 通知...", flush=True)
+                msg = format_alert(title, venue_name, event_id, "🎟️ 系統偵測到有票券釋出！")
+                send_line_message(msg)
+                NOTIFIED_EVENTS.add(event_id)
+            else:
+                print(f"[{venue_name}] 仍有票，但已於本輪發送過推播，跳過避免洗版。", flush=True)
+        else:
+            # 如果票被搶走了，重置通知狀態，下次又有票時才能再次通知
+            if event_id in NOTIFIED_EVENTS:
+                print(f"[{venue_name}] 票券已搶完，重置通知狀態。", flush=True)
+                NOTIFIED_EVENTS.remove(event_id)
 
     except Exception as e:
         print(f"Error checking {venue_name} ({event_id}): {e}", flush=True)
