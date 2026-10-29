@@ -1,102 +1,32 @@
-import os
-import time
 import requests
+import re
+import json
 
-# 監控場次 ID（台北、高雄、屏東）
-EVENT_IDS = [
-    "2076925048527581185",  # 台北場
-    "2079132570898259969",  # 高雄場
-    "2072537230141886465",  # 屏東場
-]
+TARGET_URL = "https://www.opentix.life/event/2072537230141886465"
 
-LINE_CHANNEL_ACCESS_TOKEN = (os.getenv("LINE_CHANNEL_ACCESS_TOKEN") or "").strip()
-LINE_USER_ID = (os.getenv("LINE_USER_ID") or "").strip()
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+}
 
-def send_line_message(text_content):
-    if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_USER_ID:
-        print("Missing LINE credentials.", flush=True)
-        return
+print(f"Fetching {TARGET_URL}...", flush=True)
+res = requests.get(TARGET_URL, headers=headers, timeout=15)
+print(f"Status Code: {res.status_code}", flush=True)
 
-    url = "https://api.line.me/v2/bot/message/push"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "to": LINE_USER_ID,
-        "messages": [{"type": "text", "text": text_content}]
-    }
-    try:
-        res = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"Push status: {res.status_code}", flush=True)
-        if res.status_code != 200:
-            print(f"LINE response: {res.text}", flush=True)
-    except Exception as e:
-        print(f"Failed to push LINE message: {e}", flush=True)
+# 1. Check if Nuxt state data exists inside the HTML
+if "window.__NUXT__" in res.text:
+    print("Found window.__NUXT__ in HTML!", flush=True)
+    # Find snippets containing ticket or seat terms
+    matches = re.findall(r'.{0,50}(?:remainingTickets|pricePlans|performances|price).{0,50}', res.text)
+    print(f"Found {len(matches)} matches around ticket keywords. First few:")
+    for m in matches[:5]:
+        print(f"  -> {m.strip()}")
+else:
+    print("No __NUXT__ state found in HTML.")
 
-def format_alert(title, venue, date_str, price, available_count, event_id):
-    return (
-        f"🎹 阿格麗希釋票速報！\n\n"
-        f"{title}\n"
-        f"📍{venue}\n"
-        f"{date_str}\n\n"
-        f"🎟️ {price} 元 | 剩餘 {available_count} 張\n\n"
-        f"快去 OPENTIX 搶票：\n"
-        f"https://www.opentix.life/event/{event_id}"
-    )
-
-def check_event(event_id):
-    api_url = f"https://www.opentix.life/oapi/v1/events/{event_id}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": f"https://www.opentix.life/event/{event_id}",
-    }
-    
-    try:
-        response = requests.get(api_url, headers=headers, timeout=10)
-        
-        # 檢查是否被阻擋或回傳非 200
-        if response.status_code != 200:
-            print(f"[{event_id}] HTTP 狀態異常: {response.status_code}，內容: {response.text[:100]}", flush=True)
-            return
-
-        data = response.json()
-        title = data.get("title", "瑪莎·阿格麗希音樂會")
-        print(f"Checked OPENTIX [{title}] - Status: 200 (OK)", flush=True)
-
-    except Exception as e:
-        print(f"Error fetching {event_id}: {e}", flush=True)
-        return
-
-    for perf in data.get("performances", []):
-        venue = perf.get("venue", {}).get("name", "音樂廳")
-        start_time = perf.get("startDateTime", "")
-
-        for plan in perf.get("pricePlans", []):
-            remaining = plan.get("remainingTickets", 0)
-            price = plan.get("price", 0)
-
-            # 正式上線：只有在剩餘票數大於 0 時才推播
-            if remaining > 0:
-                print(f"[{venue}] 發現釋票: {price} 元, 剩餘 {remaining} 張！", flush=True)
-                msg = format_alert(title, venue, start_time, price, remaining, event_id)
-                send_line_message(msg)
-
-def poll_for_duration(minutes=10, interval=20):
-    """雲端巡邏：每 20 秒輪詢一次三大場次，跑滿指定分鐘數"""
-    end_time = time.time() + (minutes * 60)
-    print(f"Starting cloud monitoring loop ({interval}s interval for {minutes}m)...", flush=True)
-    
-    while time.time() < end_time:
-        for eid in EVENT_IDS:
-            check_event(eid)
-        time.sleep(interval)
-
-if __name__ == "__main__":
-    loop_mins = int(os.getenv("LOOP_MINUTES", "0"))
-    if loop_mins > 0:
-        poll_for_duration(minutes=loop_mins, interval=20)
-    else:
-        for eid in EVENT_IDS:
-            check_event(eid)
+# 2. Check for any internal API paths mentioned in the source scripts
+api_matches = list(set(re.findall(r'https?://[a-zA-Z0-9.\-_/]*(?:api|oapi|programs|events)[a-zA-Z0-9.\-_/]*', res.text)))
+print(f"\nFound {len(api_matches)} API URLs inside the page scripts:")
+for url in api_matches[:10]:
+    print(f"  * {url}")
