@@ -48,21 +48,27 @@ def format_alert(title, venue, date_str, price, available_count, event_id):
 def check_event(event_id):
     api_url = f"https://www.opentix.life/oapi/api/v1/events/{event_id}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": f"https://www.opentix.life/event/{event_id}",
     }
     
     try:
         response = requests.get(api_url, headers=headers, timeout=10)
+        
+        # 檢查是否被阻擋或回傳非 200
+        if response.status_code != 200:
+            print(f"[{event_id}] HTTP 狀態異常: {response.status_code}，內容: {response.text[:100]}", flush=True)
+            return
+
         data = response.json()
-        # --- Heartbeat check ---
-        title = data.get("title", "")
-        print(f"Checked OPENTIX [{title}] - Status: {response.status_code} (OK)", flush=True)
-        # -----------------------
+        title = data.get("title", "瑪莎·阿格麗希音樂會")
+        print(f"Checked OPENTIX [{title}] - Status: 200 (OK)", flush=True)
+
     except Exception as e:
         print(f"Error fetching {event_id}: {e}", flush=True)
         return
 
-    title = data.get("title", "瑪莎·阿格麗希音樂會")
     for perf in data.get("performances", []):
         venue = perf.get("venue", {}).get("name", "音樂廳")
         start_time = perf.get("startDateTime", "")
