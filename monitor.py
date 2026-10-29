@@ -46,7 +46,7 @@ def format_alert(title, venue, date_str, price, available_count, event_id):
     )
 
 def check_event(event_id):
-    api_url = f"https://www.opentix.life/oapi/api/v1/events/{event_id}"
+    api_url = f"https://www.opentix.life/oapi/v1/events/{event_id}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
