@@ -1,7 +1,7 @@
 import os
 import time
 import requests
-import json
+import re
 
 EVENTS = {
     "2076925048527581185": "台北·國家音樂廳",
@@ -36,66 +36,63 @@ def send_line_message(text_content):
     except Exception as e:
         print(f"Failed to push LINE message: {e}", flush=True)
 
+def format_alert(title, venue, event_id, count_info=""):
+    ticket_line = f"🎫 {count_info}\n\n" if count_info else ""
+    return (
+        f"🎹 阿格麗希釋票速報！\n\n"
+        f"{title}\n"
+        f"📍{venue}\n\n"
+        f"{ticket_line}"
+        f"快去 OPENTIX 搶票：\n"
+        f"https://www.opentix.life/event/{event_id}"
+    )
+
 def check_event(event_id, venue_name):
-    # 直接打 OPENTIX 官方內部資料 API，反應最快、資料最精準
-    api_url = f"https://www.opentix.life/oapi/v1/events/{event_id}"
+    page_url = f"https://www.opentix.life/event/{event_id}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
     }
     
     try:
-        res = requests.get(api_url, headers=headers, timeout=10)
+        res = requests.get(page_url, headers=headers, timeout=12)
         if res.status_code != 200:
-            print(f"[{venue_name}] API HTTP {res.status_code}", flush=True)
+            print(f"[{venue_name}] HTTP {res.status_code}", flush=True)
             return
 
-        data = res.json()
-        title = data.get("title") or "阿格麗希音樂會"
+        html = res.text
+
+        title_match = re.search(r'<title>(.*?)</title>', html)
+        title = title_match.group(1).split('|')[0].strip() if title_match else "瑪莎·阿格麗希音樂會"
+
+        # 1. 抓取明確的剩餘票數（例如網頁上的「剩：1」或 JSON 裡的 remainingTickets）
+        explicit_rem = re.findall(r'剩\s*[:：]\s*(\d+)', html)
+        json_rem = re.findall(r'remainingTickets["\']?\s*:\s*(\d+)', html)
         
-        # 統計所有場次的剩餘票數
-        total_remaining = 0
-        available_prices = set()
+        all_counts = [int(c) for c in (explicit_rem + json_rem) if int(c) > 0]
+        has_positive_tickets = len(all_counts) > 0
+        total_remaining = max(all_counts) if has_positive_tickets else None
 
-        for perf in data.get("performances", []):
-            # 統計場次剩餘總票數
-            perf_tickets = perf.get("remainingTickets", 0)
-            if isinstance(perf_tickets, int) and perf_tickets > 0:
-                total_remaining += perf_tickets
-            
-            # 檢查各個票價階層
-            for price_tier in perf.get("prices", []):
-                price_val = price_tier.get("price")
-                remaining = price_tier.get("remainingTickets", 0)
-                # 若該價位有票，記錄該價位
-                if remaining > 0 and price_val:
-                    available_prices.add(f"NT$ {price_val}")
+        # 2. 備用判定：檢查是否有「電腦配位」或「自行選位」且未被 disabled
+        has_buy_button = ("電腦配位" in html or "自行選位" in html) and ("已售完" not in html and "已售罄" not in html)
 
-        has_tickets = total_remaining > 0
-        print(f"Checked [{venue_name}] - TicketsFound: {has_tickets} (Remaining: {total_remaining})", flush=True)
+        is_available = has_positive_tickets or (has_buy_button and '"availability":"InStock"' in html)
 
-        if has_tickets:
+        count_desc = f"剩餘票數：約 {total_remaining} 張" if total_remaining else "有票券釋出！"
+        print(f"Checked [{venue_name}] - Available: {is_available} (Counts: {all_counts})", flush=True)
+
+        if is_available:
             if event_id not in NOTIFIED_EVENTS:
                 print(f"🚨 [{venue_name}] 偵測到釋票！發送 LINE 通知...", flush=True)
-                
-                price_text = f"💰 可購票價：{', '.join(sorted(available_prices))}\n" if available_prices else ""
-                msg = (
-                    f"🎹 阿格麗希釋票速報！\n\n"
-                    f"{title}\n"
-                    f"📍{venue_name}\n\n"
-                    f"🎫 剩餘票數：約 {total_remaining} 張\n"
-                    f"{price_text}\n"
-                    f"快去 OPENTIX 搶票：\n"
-                    f"https://www.opentix.life/event/{event_id}"
-                )
+                msg = format_alert(title, venue_name, event_id, count_desc)
                 send_line_message(msg)
                 NOTIFIED_EVENTS.add(event_id)
             else:
-                print(f"[{venue_name}] 仍有票，已於本輪推播過跳過。", flush=True)
+                print(f"[{venue_name}] 仍有票，已推播過跳過。", flush=True)
         else:
             if event_id in NOTIFIED_EVENTS:
-                print(f"[{venue_name}] 票券已搶完，重置通知狀態。", flush=True)
+                print(f"[{venue_name}] 票券已搶完，重置狀態。", flush=True)
                 NOTIFIED_EVENTS.remove(event_id)
 
     except Exception as e:
