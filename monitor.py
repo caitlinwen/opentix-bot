@@ -2,6 +2,7 @@ import os
 import time
 import requests
 
+# 監控場次 ID（台北、高雄、屏東）
 EVENT_IDS = [
     "2076925048527581185",  # 台北場
     "2079132570898259969",  # 高雄場
@@ -29,7 +30,7 @@ def send_line_message(text_content):
         res = requests.post(url, json=payload, headers=headers, timeout=10)
         print(f"Push status: {res.status_code}", flush=True)
         if res.status_code != 200:
-            print(f"LINE error details: {res.text}", flush=True)
+            print(f"LINE response: {res.text}", flush=True)
     except Exception as e:
         print(f"Failed to push LINE message: {e}", flush=True)
 
@@ -66,12 +67,14 @@ def check_event(event_id):
             remaining = plan.get("remainingTickets", 0)
             price = plan.get("price", 0)
 
+            # 正式上線：只有在剩餘票數大於 0 時才推播
             if remaining > 0:
                 print(f"[{venue}] 發現釋票: {price} 元, 剩餘 {remaining} 張！", flush=True)
                 msg = format_alert(title, venue, start_time, price, remaining, event_id)
                 send_line_message(msg)
 
 def poll_for_duration(minutes=10, interval=20):
+    """雲端巡邏：每 20 秒輪詢一次三大場次，跑滿指定分鐘數"""
     end_time = time.time() + (minutes * 60)
     print(f"Starting cloud monitoring loop ({interval}s interval for {minutes}m)...", flush=True)
     
@@ -80,16 +83,10 @@ def poll_for_duration(minutes=10, interval=20):
             check_event(eid)
         time.sleep(interval)
 
-# --- ONE-TIME DIRECT TEST ---
 if __name__ == "__main__":
-    print("Testing LINE connection now...", flush=True)
-    msg = format_alert(
-        "瑪莎·阿格麗希鋼琴獨奏會",
-        "台北・國家音樂廳",
-        "11/12 (四) 19:30",
-        "1200",
-        1,
-        "2076925048527581185"
-    )
-    send_line_message(msg)
-    print("Test run completed.", flush=True)
+    loop_mins = int(os.getenv("LOOP_MINUTES", "0"))
+    if loop_mins > 0:
+        poll_for_duration(minutes=loop_mins, interval=20)
+    else:
+        for eid in EVENT_IDS:
+            check_event(eid)
