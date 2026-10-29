@@ -76,8 +76,8 @@ def check_event(event_id, venue_name):
         # OPENTIX 全售完時頁面通常會出現「已售完」或全部方案被加上 block_soldOut
         is_sold_out_banner = "已售罄" in html or "已售完" in html
         is_instock_schema = bool(re.search(r'"availability"\s*:\s*"(?:https?://schema\.org/)?InStock"', html))
-
-        is_available = has_positive_remaining or (is_instock_schema and not is_sold_out_banner)
+        # 嚴格判定：只有當真正抓到剩餘張數 > 0 時才視為釋票
+        is_available = has_positive_remaining
 
         print(f"Checked [{venue_name}] - InStockSchema: {is_instock_schema}, SoldOutText: {is_sold_out_banner}, TicketsFound: {has_positive_remaining}", flush=True)
 
